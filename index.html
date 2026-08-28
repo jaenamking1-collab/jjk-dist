@@ -31,8 +31,9 @@
   .logo{font-size:18px; font-weight:800; letter-spacing:-0.3px;
     background:linear-gradient(90deg,#ec4899,#8b5cf6,#3b82f6);
     -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;}
+  /* 390px에서 '새로고침'이 '새로고/침'으로 쪼개져 헤더가 81px로 부풀었다(실측) */
   .refresh{background:#fff; border:1px solid #e7e0f5; border-radius:10px; padding:7px 12px;
-    font-size:13px; color:var(--text2); cursor:pointer;}
+    font-size:13px; color:var(--text2); cursor:pointer; white-space:nowrap;}
   .refresh:hover{background:var(--bg3);}
   .wrap{padding:16px;}
   .panels{display:flex; gap:14px; align-items:stretch; flex-wrap:wrap; justify-content:center;}
@@ -41,11 +42,28 @@
   .p-cal{flex:0 1 792px; min-width:460px; max-width:792px; background:#f8fafc; border:1px solid #e2e8f0;}
   .p-sched{width:340px; flex-shrink:0; background:#fdf4ff; border:1px solid #f0e2f5;}
   .p-title{font-size:12px; font-weight:700; margin-bottom:8px;}
+  /* 데이터가 도착하며 빈 패널이 654px로 부풀어 아래 종목 섹션과 그 ←/→ 버튼을 밀어냈다
+     (CLS 0.161~0.236 실측). 로딩 중에도 자리를 잡아둔다. 세로로 쌓이는 모바일은 제외. */
+  @media (min-width:821px){ .p-notice, .p-cal, .p-sched{min-height:620px;} }
+
+  /* 세 패널 합이 300+792+340+여백 = 1,504px 이라 그보다 좁은 화면(1280·1366·1440 — 흔한
+     노트북 폭)에서 '일정'만 둘째 줄에 홀로 가운데 정렬로 떨어지고 달력 옆이 비었다.
+     그 구간에서는 공지+달력을 한 줄, 일정을 그 아래 전체 폭으로 내린다. */
+  @media (max-width:1503px) and (min-width:821px){
+    .p-sched{width:100%; flex:1 1 100%; max-width:100%;}
+    .p-cal{flex:1 1 auto; max-width:none;}
+    #distScheduleList table{width:100%;}
+  }
 
   /* ── 탭 메뉴: 한 번에 한 섹션만 보기 ── */
   .tabbar{position:sticky; top:0; z-index:30; display:none; gap:5px; padding:8px 12px; background:var(--bg2); border-bottom:1px solid var(--border);}  /* PC: 숨김(전체 표시). 모바일서만 flex로 표시 */
   .tab-btn{flex:1; min-width:0; padding:9px 4px; border:1px solid var(--border); border-radius:9px; background:#fff; color:var(--text2); font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .tab-btn.active{background:var(--accent); color:#fff; border-color:var(--accent);}
+
+  /* 화살표·오늘 버튼. 모바일 실측이 24x24(권장 44x44의 30% 면적)라 손가락으로 못 짚는다. */
+  .nav-btn{width:24px; height:24px; border:1px solid var(--border); border-radius:6px;
+    background:var(--bg2); color:var(--text); font-size:13px; font-weight:700; cursor:pointer; line-height:1;}
+  .nav-today{width:auto; padding:3px 8px; font-size:11px; line-height:1.4;}
 
   /* ── notice cards ── */
   #noticeGrid{display:flex; flex-direction:column; gap:8px;}
@@ -69,7 +87,12 @@
   .dist-items{max-height:340px; overflow-y:auto;}
   #distGrid td.dg-name{max-width:160px;}  /* 종목명 열 폭: 데스크톱 기준(모바일은 아래 미디어쿼리에서 축소) */
   .notice-loading{font-size:12px; color:var(--text3); text-align:center; padding:16px 0;}
-  .notice-err{font-size:12px; color:var(--red); text-align:center; padding:16px 0;}
+  .notice-err{font-size:12px; color:#b91c1c; text-align:center; padding:16px 0;}
+  .notice-empty{font-size:12px; color:var(--text2); text-align:center; padding:16px 0;}
+  /* 회차 상태 한 줄 — 달력 바로 위. 대비 6.9:1(#1e3a8a on #eff6ff) */
+  .cal-status{font-size:12px; line-height:1.5; color:#1e3a8a; background:#eff6ff;
+    border:1px solid #bfdbfe; border-radius:6px; padding:6px 10px; margin-bottom:8px;}
+  .cal-status b{font-weight:800;}
   .spinner{display:inline-block; width:16px; height:16px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .6s linear infinite; vertical-align:middle; margin-right:6px;}
   @keyframes spin{to{transform:rotate(360deg)}}
 
@@ -98,7 +121,15 @@
     .panels{flex-direction:column; align-items:stretch; gap:8px;}
     .dist-grid{grid-template-columns:1fr;}
     .tabbar{display:flex; padding:6px 8px; gap:4px;}
-    .tab-btn{font-size:11px; padding:8px 2px;}
+    /* 탭·화살표를 손가락 크기로 — 실측 tab-btn 91x33, 화살표 24x24 였다 */
+    .tab-btn{font-size:11px; padding:14px 2px;}
+    .nav-btn{width:40px; height:40px; min-width:40px; flex:0 0 auto; font-size:15px;}
+    /* ★/✕ 는 141행짜리 표의 셀이라 44px까지 키우면 표가 두 배로 길어진다.
+       행 높이를 27→35px 로만 올려 손가락이 닿게 하고, 대신 키보드로도 누를 수 있게 했다. */
+    /* 셀에 인라인 padding 이 있어 !important 없이는 안 먹는다 */
+    #distGrid td[role="button"]{padding:9px 2px !important;}
+    .nav-today{width:auto; height:40px; padding:0 12px; font-size:12px;}
+    #hideToggle, #favToggle{padding:11px 12px !important;}
     /* 탭: active 섹션만 표시(모바일 전용). PC엔 이 규칙이 없어 전부 보임 */
     .p-notice, .p-cal, .p-sched, #sec-grid{display:none;}
     .p-notice.tab-active, .p-cal.tab-active, .p-sched.tab-active, #sec-grid.tab-active{display:block;}
@@ -113,8 +144,10 @@
     #distScheduleList{min-width:0;}
     #distScheduleList table{font-size:10px;}
     #distScheduleList th{padding:5px 2px;}
-    /* 공지 종목 표: 종목명 열을 줄여 분배율 열까지 화면에 다 들어오게 */
-    #distGrid td.dg-name{max-width:100px;}
+    /* 공지 종목 표: 390px에서 전달비·✕ 열이 화면 밖으로 64px 밀려 있었다(실측).
+       종목명을 줄이는 것만으로는 모자라 '코드' 열을 감춘다 — 종목명이 바로 옆에 있어 잃는 정보가 없다. */
+    #distGrid td.dg-name{max-width:92px;}
+    #distGrid .dg-code{display:none;}
     .cal-grid{gap:2px;}
     .cal-dow{font-size:11px; padding:4px 0;}
     .cal-cell{padding:3px; min-height:74px; border-radius:5px;}
@@ -135,6 +168,7 @@
   <div style="display:flex;align-items:baseline;gap:10px;min-width:0">
     <div class="logo">ETF 분배금 공지</div>
     <span id="visitCount" style="font-size:12px;color:#64748b;font-weight:600;white-space:nowrap"></span>
+    <span id="dataFresh" style="font-size:12px;color:#475569;font-weight:600;white-space:nowrap"></span>
   </div>
   <button class="refresh" onclick="pageRefresh()">🔄 새로고침</button>
 </header>
@@ -151,17 +185,17 @@
     <div class="panel p-notice">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
         <div class="p-title" id="noticeTitle" style="color:#16a34a;margin-bottom:0">📢 분배금 공지</div>
-        <button onclick="noticeShiftMonth(-1)" title="이전 달" style="width:24px;height:24px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:13px;font-weight:700;cursor:pointer;line-height:1">←</button>
-        <button onclick="noticeShiftMonth(1)" title="다음 달" style="width:24px;height:24px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:13px;font-weight:700;cursor:pointer;line-height:1">→</button>
+        <button onclick="noticeShiftMonth(-1)" title="이전 달" class="nav-btn">←</button>
+        <button onclick="noticeShiftMonth(1)" title="다음 달" class="nav-btn">→</button>
       </div>
       <div id="noticeGrid"><div class="notice-loading">불러오는 중...</div></div>
     </div>
     <div class="panel p-cal tab-active">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
         <div class="p-title" style="color:#64748b;margin-bottom:0">📅 분배 일정 달력</div>
-        <button onclick="calShiftWeek(-1)" title="한 주 앞으로" style="width:24px;height:24px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:13px;font-weight:700;cursor:pointer;line-height:1">←</button>
-        <button onclick="calShiftWeek(1)" title="한 주 뒤로" style="width:24px;height:24px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:13px;font-weight:700;cursor:pointer;line-height:1">→</button>
-        <button onclick="calShiftWeek(0)" title="오늘 주로" style="height:24px;padding:0 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text2);font-size:11px;font-weight:600;cursor:pointer;line-height:1">오늘</button>
+        <button onclick="calShiftWeek(-1)" title="한 주 앞으로" class="nav-btn">←</button>
+        <button onclick="calShiftWeek(1)" title="한 주 뒤로" class="nav-btn">→</button>
+        <button onclick="calShiftWeek(0)" title="오늘 주로" class="nav-btn nav-today">오늘</button>
       </div>
       <div class="cal-scroll">
         <div id="distMasterCalendar"><div style="color:var(--text3);font-size:13px"><span class="spinner"></span>불러오는 중...</div></div>
@@ -170,8 +204,8 @@
     <div class="panel p-sched">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
         <div class="p-title" id="schedTitle" style="color:#a855a8;margin-bottom:0">🏢 운용사별 일정</div>
-        <button onclick="schedShiftMonth(-1)" title="이전 달" style="width:24px;height:24px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:13px;font-weight:700;cursor:pointer;line-height:1">←</button>
-        <button onclick="schedShiftMonth(1)" title="다음 달" style="width:24px;height:24px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:13px;font-weight:700;cursor:pointer;line-height:1">→</button>
+        <button onclick="schedShiftMonth(-1)" title="이전 달" class="nav-btn">←</button>
+        <button onclick="schedShiftMonth(1)" title="다음 달" class="nav-btn">→</button>
       </div>
       <div class="sched-scroll"><div id="distScheduleList"></div></div>
       <div id="distNoticeBoard"></div>
@@ -180,12 +214,12 @@
   <div id="sec-grid" style="background:#fffbeb;border:1px solid #fef3c7;border-radius:12px;padding:16px;margin-top:14px">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
       <div id="gridTitle" style="font-size:15px;font-weight:700">📋 공지 종목 전체</div>
-      <button onclick="gridShiftMonth(-1)" title="이전 달" style="width:24px;height:24px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:13px;font-weight:700;cursor:pointer;line-height:1">←</button>
-      <button onclick="gridShiftMonth(1)" title="다음 달" style="width:24px;height:24px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:13px;font-weight:700;cursor:pointer;line-height:1">→</button>
-      <button id="hideToggle" onclick="toggleShowHidden()" title="표의 ✕를 누르면 그 종목이 목록에서 빠집니다 (이 브라우저에 저장됩니다)" style="margin-left:auto;padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:12px;font-weight:700;cursor:pointer;line-height:1.4">🙈 숨김</button>
-      <button id="favToggle" onclick="toggleFavOnly()" title="★ 표시한 종목만 보기 (이 브라우저에 저장됩니다)" style="padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:12px;font-weight:700;cursor:pointer;line-height:1.4">☆ 관심만</button>
+      <button onclick="gridShiftMonth(-1)" title="이전 달" class="nav-btn">←</button>
+      <button onclick="gridShiftMonth(1)" title="다음 달" class="nav-btn">→</button>
+      <button id="hideToggle" onclick="toggleShowHidden()" title="표의 ✕를 누르면 그 종목이 목록에서 빠집니다 (이 브라우저에 저장됩니다)" style="margin-left:auto;padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:12px;font-weight:700;cursor:pointer;line-height:1.4;white-space:nowrap">🙈 숨김</button>
+      <button id="favToggle" onclick="toggleFavOnly()" title="★ 표시한 종목만 보기 (이 브라우저에 저장됩니다)" style="padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:12px;font-weight:700;cursor:pointer;line-height:1.4;white-space:nowrap">☆ 관심만</button>
     </div>
-    <div id="distGrid"><div style="color:var(--text3);font-size:13px"><span class="spinner"></span>불러오는 중...</div></div>
+    <div id="distGrid" style="min-height:560px"><div style="color:var(--text3);font-size:13px"><span class="spinner"></span>불러오는 중...</div></div>
   </div>
 </div>
 
@@ -201,6 +235,9 @@ async function api(params){
   return res.json();
 }
 
+// 스크래핑해 온 URL은 속성 안에 그대로 넣지 않는다 — 따옴표 하나로 핸들러가 깨지고,
+// 공개 페이지라 그 이상도 된다. http(s)가 아니면 링크로 만들지 않는다(javascript: 차단).
+const safeUrl = u => /^https?:\/\//i.test(String(u||'')) ? encodeURI(u).replace(/["']/g, c => c === '"' ? '%22' : '%27') : '';
 const DIST_SOURCES = [
   { id:'kodex', name:'KODEX', label:'삼성자산운용',   color:'#2563eb' },
   { id:'tiger', name:'TIGER', label:'미래에셋자산운용', color:'#f59e0b' },
@@ -209,11 +246,13 @@ const DIST_SOURCES = [
   { id:'rise',  name:'RISE',  label:'KB자산운용',    color:'#dc2626' },
   { id:'sol',   name:'SOL',   label:'신한자산운용',   color:'#0891b2' }
 ];
+// text: 라벨 글자색. 배경은 color 의 10% 틴트라 같은 색 글자로는 대비가 2:1대로 떨어진다
+// (실측 분배락일 1.90:1). 색 코딩은 그대로 두고 글자만 700-shade 로 내려 4.5:1 을 넘긴다.
 const SCHED_CFG = [
-  { key:'공시일',  color:'#f59e0b', label:'분배금공시일', short:'공시일' },
-  { key:'분배락일', color:'#22c55e', label:'분배락일', short:'분배락일' },
-  { key:'기준일',  color:'#3b82f6', label:'분배금지급기준일', short:'기준일' },
-  { key:'지급일',  color:'#ef4444', label:'분배금지급일', short:'지급일' },
+  { key:'공시일',  color:'#f59e0b', text:'#92400e', label:'분배금공시일', short:'공시일' },
+  { key:'분배락일', color:'#22c55e', text:'#166534', label:'분배락일', short:'분배락일' },
+  { key:'기준일',  color:'#3b82f6', text:'#1d4ed8', label:'분배금지급기준일', short:'기준일' },
+  { key:'지급일',  color:'#ef4444', text:'#b91c1c', label:'분배금지급일', short:'지급일' },
 ];
 // 한국 공휴일(증시 휴장) — 근로자의날 포함. '대체'는 대체공휴일.
 // 제헌절은 2026년부터 공휴일로 재지정됨(2026-07-17). 달력은 평일만 그리므로 주말 공휴일은 표시되지 않는다.
@@ -238,14 +277,19 @@ const NOTICE_SOURCES = DIST_SOURCES.map(s => ({
 
 let _distData = [];
 let _calWeekOffset = 0;   // 달력 주 단위 이동 (←/→ 버튼)
-let _schedMonthOffset = 0; // 운용사별 일정 표: 월 단위 이동 (0=이번 달)
-let _gridMonthOffset = 0;  // 공지 종목 전체 그리드: 월 단위 이동 (0=이번 달)
-
-function gridShiftMonth(dir){
-  if (!_distData.length) return;
-  _gridMonthOffset = Math.max(-1, Math.min(1, _gridMonthOffset + dir));
-  renderDistGrid(_distData);
+// ── 월 커서는 하나다 ──
+// 공지·일정·종목 세 패널이 각자 오프셋을 들고 있어서 '일정만 9월, 옆은 8월' 같은 상태가
+// 정상 동작이었고, 화면 어디에도 그 관계가 표시되지 않았다. 셋 다 '월' 단위로 같은 것을
+// 가리키므로 하나로 묶는다(달력만 주 단위라 그대로 둔다).
+let _monthOffset = 0;
+function shiftMonth(dir){
+  if (!_distData.length && !_noticeData) return;
+  _monthOffset = Math.max(-1, Math.min(1, _monthOffset + dir));
+  if (_distData.length) { renderMasterCalendar(_distData); renderDistGrid(_distData); }
+  if (_noticeData) renderNotices();
 }
+
+function gridShiftMonth(dir){ shiftMonth(dir); }
 
 // dir: -1 한 주 앞으로, +1 한 주 뒤로, 0 오늘 주로 리셋
 function calShiftWeek(dir){
@@ -255,11 +299,7 @@ function calShiftWeek(dir){
 }
 
 // 운용사별 일정 표의 달 이동. 공지 데이터가 전월~익월 정도만 있어 ±1로 제한.
-function schedShiftMonth(dir){
-  if (!_distData.length) return;
-  _schedMonthOffset = Math.max(-1, Math.min(1, _schedMonthOffset + dir));
-  renderMasterCalendar(_distData);
-}
+function schedShiftMonth(dir){ shiftMonth(dir); }
 
 async function loadDistributions(force){
   const cal = document.getElementById('distMasterCalendar');
@@ -302,6 +342,7 @@ async function loadDistributions(force){
     // portfolio.html의 같은 함수와 쌍이다 — 한쪽을 고치면 반드시 다른 쪽도.
     renderMasterCalendar(_distData);
     renderDistGrid(_distData);
+    renderFreshness(_distData);
     // force면 6개사 전부 실시간 재파싱, 아니면 캐시가 오래된 곳만.
     // fillStale은 **빈 결과로는 덮지 않으므로** 재파싱이 실패해도 위에서 그린 캐시가 남는다.
     await fillStale(force ? (() => true) : (d => d.data.stale), force ? 90000 : 45000);
@@ -366,13 +407,13 @@ function renderMasterCalendar(allData){
         roundTally[k].n++;
       }
     }
-    SCHED_CFG.forEach(({ key, color, label, short }) => {
+    SCHED_CFG.forEach(({ key, color, text, label, short }) => {
       // 예정도 **라벨은 확정분과 똑같이** 둔다 → 같은 줄에 `SOL?` 배지로만 붙는다.
       // 라벨에 '예정'을 붙였더니 한 칸에 '분배락일'과 '분배락일 예정' 두 줄이 생겨 달력이 지저분해졌다.
       // (addMark의 회사+라벨 중복제거는 **같은 날짜 칸 안에서만** 걸리므로 라벨을 나눌 이유가 없었다.)
       const lbl = (key === '지급일' && cyc) ? `${cyc} 지급일` : label;
       const sh = (key === '지급일' && cyc) ? `${cyc} 지급일` : short;
-      addMark(parseDay(sch[key]), c.name, c.color, lbl, color, sh, uncertain);
+      addMark(parseDay(sch[key]), c.name, c.color, lbl, color, text, sh, uncertain);
     });
   };
 
@@ -397,13 +438,13 @@ function renderMasterCalendar(allData){
   const nextMonth = month === 12 ? 1 : month + 1;
   const prevMonth = month === 1 ? 12 : month - 1;
   const marks = {};
-  const addMark = (p, source, sourceColor, label, labelColor, shortLabel, uncertain) => {
+  const addMark = (p, source, sourceColor, label, labelColor, labelText, shortLabel, uncertain) => {
     if (!p) return;
     if (p.m !== month && p.m !== nextMonth && p.m !== prevMonth) return;
     const k = `${p.m}-${p.d}`;
     if (!marks[k]) marks[k] = [];
     if (marks[k].some(x => x.source === source && x.label === label)) return;
-    marks[k].push({ source, sourceColor, label, labelColor, shortLabel: shortLabel || label, uncertain: !!uncertain });
+    marks[k].push({ source, sourceColor, label, labelColor, labelText: labelText || labelColor, shortLabel: shortLabel || label, uncertain: !!uncertain });
   };
   allData.forEach(c => {
     const repSched = (c.data && c.data.schedule) || {};
@@ -481,7 +522,7 @@ function renderMasterCalendar(allData){
     const dateColor = isToday ? '#2563eb' : (hol || dow === 0) ? '#dc2626' : dow === 6 ? '#2563eb' : 'var(--text)';
     const byLabel = {};
     ms.forEach(mk => {
-      if (!byLabel[mk.label]) byLabel[mk.label] = { labelColor: mk.labelColor, shortLabel: mk.shortLabel, sources: [] };
+      if (!byLabel[mk.label]) byLabel[mk.label] = { labelColor: mk.labelColor, labelText: mk.labelText, shortLabel: mk.shortLabel, sources: [] };
       byLabel[mk.label].sources.push({ name: mk.source, color: mk.sourceColor, uncertain: mk.uncertain });
     });
     const eventHtml = Object.keys(byLabel).map(label => {
@@ -496,7 +537,7 @@ function renderMasterCalendar(allData){
       }).join('');
       return `<div style="margin-top:4px">
         <div class="cal-icons">${icons}</div>
-        <div class="cal-evt" style="background:${g.labelColor}1a;color:${g.labelColor}"><span class="lbl-full">${label}</span><span class="lbl-short">${g.shortLabel || label}</span></div>
+        <div class="cal-evt" style="background:${g.labelColor}1a;color:${g.labelText || g.labelColor}"><span class="lbl-full">${label}</span><span class="lbl-short">${g.shortLabel || label}</span></div>
       </div>`;
     }).join('');
     return `<div class="cal-cell" style="${bg}${border}">
@@ -505,8 +546,46 @@ function renderMasterCalendar(allData){
     </div>`;
   };
 
+  // ── 회차 상태 한 줄 ──
+  // 달력을 보고 나면 사용자가 하는 질문은 하나다: "지금 사면 받나, 놓쳤나."
+  // 그 답이 지금까지 세 번째 패널의 상시 안내 문구에만 있었고 모바일 기본 탭에선 안 보였다.
+  // 새 데이터 소스는 없다 — 방금 만든 marks 와 prevBizDay 를 그대로 쓴다.
+  const _md = k => ({ m: +k.split('-')[0], d: +k.split('-')[1] });
+  const _dt = q => new Date(year, q.m - 1, q.d);
+  const _t0 = new Date(year, month - 1, today);
+  const _DOW = ['일','월','화','수','목','금','토'];
+  const _fmt = q => `${q.m}/${q.d}(${_DOW[_dt(q).getDay()]})`;
+  const _days = (a, b) => Math.round((b - a) / 86400000);
+  const _pick = (test, from, before) => Object.keys(marks)
+    .filter(k => marks[k].some(x => test(x.label)))
+    .map(_md).map(q => ({ q, dt: _dt(q) }))
+    .filter(x => (!from || x.dt >= from) && (!before || x.dt <= before))
+    .sort((a, b) => a.dt - b.dt)[0];
+  const _isRak = l => l === '분배락일';
+  const _isStd = l => l.indexOf('기준일') >= 0;
+  const _isPay = l => /지급일$/.test(l) && l.indexOf('기준') < 0;
+  const statusHtml = (() => {
+    const rakToday = _pick(_isRak, _t0, _t0);
+    const rakNext = _pick(_isRak, new Date(_t0.getTime() + 86400000));
+    const rak = rakToday || rakNext;
+    // 다음 회차 분배락이 아직 안 잡혔으면(회차 사이) 남은 지급 예정만 알린다 — 날짜를 만들어내지 않는다.
+    if (!rak) {
+      const pay = _pick(_isPay, _t0);
+      return pay ? `이번 회차 매수는 끝났습니다 · 지급 <b>${_fmt(pay.q)}</b> 예정 — 다음 회차 공지는 아직 없습니다`
+                 : '';
+    }
+    const cut = prevBizDay(rak.q.m, rak.q.d);                 // 매수 마감 = 분배락 직전 영업일
+    const std = _pick(_isStd, rak.dt), pay = _pick(_isPay, rak.dt);
+    const tail = `${std ? ` · 기준일 <b>${_fmt(std.q)}</b>` : ''}${pay ? ` · 지급 <b>${_fmt(pay.q)}</b>` : ''}`;
+    if (rakToday) return `<b>오늘 ${_fmt(rak.q)} 분배락일</b> — 이 회차 매수는 <b>${_fmt(cut)}</b>로 마감됐습니다${tail}`;
+    const dday = _days(_t0, _dt(cut));
+    if (dday < 0) return `이 회차 매수는 <b>${_fmt(cut)}</b>로 마감됐습니다 · 분배락 ${_fmt(rak.q)}${tail}`;
+    return `다음 매수 마감 <b>${_fmt(cut)}</b> ${dday === 0 ? '<b>오늘까지</b>' : `<b>D-${dday}</b>`} — 그날까지 사면 받습니다 · 분배락 ${_fmt(rak.q)}${tail}`;
+  })();
+
   const calHtml = `
     <div>
+      ${statusHtml ? `<div class="cal-status">${statusHtml}</div>` : ''}
       <div class="cal-companies">
         ${DIST_SOURCES.map(s => `<span class="cal-co"><span class="co-chip" style="background:${s.color}">${s.name.slice(0,3)}</span>${s.name}</span>`).join('')}
       </div>
@@ -519,7 +598,7 @@ function renderMasterCalendar(allData){
 
   // ── 운용사별 일정 표 (월중/월말 2줄) ──
   // ←/→ 버튼으로 고른 달(selM)의 일정만 표시. 행 귀속 월은 기준일(없으면 지급일)의 월.
-  const selM = ((month - 1 + _schedMonthOffset) % 12 + 12) % 12 + 1;
+  const selM = ((month - 1 + _monthOffset) % 12 + 12) % 12 + 1;
   const schedTitle = document.getElementById('schedTitle');
   if (schedTitle) schedTitle.textContent = `🏢 ${selM}월 운용사별 일정`;
   const rowsData = [];
@@ -633,13 +712,7 @@ function normalizeNoticeTitle(title, source){
 }
 
 let _noticeData = null;    // 공지 원본 (월 이동 시 재사용)
-let _noticeMonthOffset = 0; // 분배금 공지 패널: 월 단위 이동 (0=이번 달)
-
-function noticeShiftMonth(dir){
-  if (!_noticeData) return;
-  _noticeMonthOffset = Math.max(-1, Math.min(1, _noticeMonthOffset + dir));
-  renderNotices();
-}
+function noticeShiftMonth(dir){ shiftMonth(dir); }
 
 // 공지 스냅샷: 백엔드 응답이 평소 1.6초인데 5회에 1번꼴로 6~19초까지 튄다. 이 패널은 6개사가
 // 다 모여야 한 번에 그리므로 그동안 통째로 "불러오는 중…"에 멈춘다. 지난번 공지를 즉시 그려두고
@@ -666,8 +739,8 @@ async function loadAllNotices(){
   const cached = (bulk && bulk.sources) || {};
   const results = await Promise.allSettled(NOTICE_SOURCES.map(s => {
     const hit = cached[s.id];
-    if (hit && !hit.stale) return Promise.resolve({ ...s, items: hit.items || [] });
-    return s.fetch().then(items => ({ ...s, items })).catch(() => ({ ...s, items: [] }));
+    if (hit && !hit.stale) return Promise.resolve({ ...s, items: hit.items || [], ok: true });
+    return s.fetch().then(items => ({ ...s, items, ok: true })).catch(() => ({ ...s, items: [], ok: false }));
   }));
   _noticeData = results.map(r => r.value || {});
   renderNotices();
@@ -682,7 +755,7 @@ function renderNotices(){
   const grid = document.getElementById('noticeGrid');
   if (!grid || !_noticeData) return;
   const now = new Date();
-  const selM = ((now.getMonth() + _noticeMonthOffset) % 12 + 12) % 12 + 1;
+  const selM = ((now.getMonth() + _monthOffset) % 12 + 12) % 12 + 1;
   const title = document.getElementById('noticeTitle');
   if (title) title.textContent = `📢 (${selM}월) 분배금 공지`;
   // 공지의 귀속 월: 제목의 'N월'(norm.mon) 우선, 없으면 등록일의 월
@@ -691,7 +764,7 @@ function renderNotices(){
     const m = String(n.date || '').match(/\d{4}[.\-\/](\d{1,2})/);
     return m ? parseInt(m[1]) : 0;
   };
-  grid.innerHTML = _noticeData.map(({ id, name, label, items }) => {
+  grid.innerHTML = _noticeData.map(({ id, name, label, items, ok }) => {
     const all = (items || []).map(n => ({ ...n, norm: normalizeNoticeTitle(n.title, id) }))
       .filter(n => n.norm.cycle !== '제외');
     const inMonth = all.filter(n => monOf(n) === selM);
@@ -712,7 +785,7 @@ function renderNotices(){
     };
     const itemHtml = n => `
           <div class="notice-item">
-            <span class="notice-title" onclick="window.open('${n.url}','_blank')" title="${(n.title||'').replace(/"/g,'&quot;')}">${n.norm.label}${isNew(n) ? '<span class="new-badge">NEW</span>' : ''}</span>
+            <span class="notice-title" onclick="window.open('${safeUrl(n.url)}','_blank')" title="${(n.title||'').replace(/"/g,'&quot;')}">${n.norm.label}${isNew(n) ? '<span class="new-badge">NEW</span>' : ''}</span>
             <span class="notice-date">${n.date}</span>
           </div>`;
     const emptySlot = cyc => `
@@ -725,7 +798,10 @@ function renderNotices(){
           picks[1] ? itemHtml(picks[1]) : emptySlot('월말'),
           picks[2] ? itemHtml(picks[2]) : '',
           ...extra.map(itemHtml) ].join('')
-      : '<div class="notice-err">불러오기 실패</div>';
+      // 응답은 왔는데 이번 달 공지가 아직 없는 것과, 못 받아온 것은 다른 상태다.
+      // 예전엔 둘 다 '불러오기 실패'라 정상인데도 빨간 글씨가 떴다.
+      : (ok === false ? '<div class="notice-err">공지를 못 받았습니다</div>'
+                      : `<div class="notice-empty">${selM}월 공지 아직 없음</div>`);
     return `
       <div class="notice-card ${id}">
         <div class="notice-brand ${id}">● ${name} <span style="font-weight:400;color:var(--text3)">${label}</span></div>
@@ -733,6 +809,23 @@ function renderNotices(){
       </div>`;
   }).join('');
   renderNoticeBoard();
+}
+
+// ── 데이터 기준 시각 ──
+// 서버는 운용사별로 stale 플래그와 savedAt(분배캐시에 쓰인 시각)을 보내는데, 지금까지 화면은
+// stale 을 재조회 판단에만 쓰고 사용자에겐 아무 말도 안 했다. 2026-08-27 에 트리거가 멎어
+// 캐시가 17시간 낡았을 때도 화면은 그냥 최신인 척했다.
+function renderFreshness(all){
+  const el = document.getElementById('dataFresh');
+  if (!el) return;
+  const has = (all || []).filter(c => c.data && (c.data.items || []).length);
+  if (!has.length) { el.textContent = ''; return; }
+  const stale = has.filter(c => c.data.stale).map(c => c.name);
+  const times = has.map(c => c.data.savedAt).filter(Boolean).sort();
+  const t = times.length ? String(times[times.length - 1]).slice(5, 16) : '';
+  el.textContent = `· 데이터 ${t}${t ? ' 기준' : ''}`
+    + (stale.length ? ` · ${stale.join('·')} 캐시` : ` · ${has.length}곳 최신`);
+  el.title = stale.length ? `${stale.join(', ')} 은(는) 마지막 파싱 결과입니다(재조회 실패 또는 대기)` : '';
 }
 
 // ── 공지 종목 전체 (하단 섹션) ──
@@ -773,7 +866,7 @@ function renderNoticeBoard() {
   const line = (badge, color, text, date, url, last) => `
     <div style="display:flex;align-items:center;gap:6px;min-width:0;padding:5px 8px${last ? '' : ';border-bottom:1px solid #64748b'}">
       <span style="flex-shrink:0;background:${color}1a;color:${color};font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px">${badge}</span>
-      ${url ? `<a href="${url}" target="_blank" style="flex:1;min-width:0;font-size:11px;line-height:1.3;color:var(--text);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${text.replace(/"/g,'&quot;')}">${text}</a>`
+      ${safeUrl(url) ? `<a href="${safeUrl(url)}" target="_blank" rel="noopener noreferrer" style="flex:1;min-width:0;font-size:11px;line-height:1.3;color:var(--text);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${text.replace(/"/g,'&quot;')}">${text}</a>`
             : `<span style="flex:1;min-width:0;font-size:11px;line-height:1.3;color:var(--text3)">${text}</span>`}
       <span style="flex-shrink:0;font-family:var(--mono);font-size:10px;color:var(--text3)">${date}</span>
     </div>`;
@@ -858,7 +951,7 @@ function renderDistGrid(allData){
   }
   const curMonth = new Date().getMonth() + 1;
   // ←/→ 로 고른 달만 표시(기준일 없으면 지급일의 월로 귀속)
-  const selM = ((curMonth - 1 + _gridMonthOffset) % 12 + 12) % 12 + 1;
+  const selM = ((curMonth - 1 + _monthOffset) % 12 + 12) % 12 + 1;
   const gridTitle = document.getElementById('gridTitle');
   if (gridTitle) gridTitle.textContent = `📋 ${selM}월 공지 종목 전체`;
   const monthOf = (s) => {
@@ -913,7 +1006,7 @@ function renderDistGrid(allData){
         <thead><tr style="background:var(--bg3)">
           <th style="padding:5px 2px;text-align:center;font-size:10px;color:var(--text3);border:1px solid var(--border)" title="별을 눌러 관심 종목으로 담습니다">★</th>
           <th style="padding:5px 6px;text-align:center;font-size:10px;color:var(--text3);border:1px solid var(--border)">주기</th>
-          <th style="padding:5px 8px;text-align:left;font-size:10px;color:var(--text3);border:1px solid var(--border)">코드</th>
+          <th class="dg-code" style="padding:5px 8px;text-align:left;font-size:10px;color:var(--text3);border:1px solid var(--border)">코드</th>
           <th style="padding:5px 8px;text-align:left;font-size:10px;color:var(--text3);border:1px solid var(--border)">종목명</th>
           <th style="padding:5px 8px;text-align:right;font-size:10px;color:var(--text3);border:1px solid var(--border)">분배금</th>
           <th style="padding:5px 8px;text-align:right;font-size:10px;color:var(--text3);border:1px solid var(--border)">분배율</th>
@@ -927,14 +1020,14 @@ function renderDistGrid(allData){
           const on = _fav.has(it.ticker);
           const off = _hide.has(it.ticker);                 // 숨김 보기 모드에서만 화면에 남는다
           return `<tr style="${rowBg}${off ? 'opacity:.45;' : ''}">
-          <td onclick="toggleFav('${it.ticker || ''}')" title="관심 종목 담기/빼기" style="padding:5px 2px;text-align:center;cursor:pointer;user-select:none;font-size:13px;line-height:1;color:${on ? '#f59e0b' : 'var(--text3)'};border:1px solid var(--border)">${on ? '★' : '☆'}</td>
+          <td onclick="toggleFav('${it.ticker || ''}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleFav('${it.ticker || ''}')}" role="button" tabindex="0" aria-label="관심 종목 담기/빼기" title="관심 종목 담기/빼기" style="padding:5px 2px;text-align:center;cursor:pointer;user-select:none;font-size:13px;line-height:1;color:${on ? '#f59e0b' : 'var(--text3)'};border:1px solid var(--border)">${on ? '★' : '☆'}</td>
           <td style="padding:5px 6px;text-align:center;white-space:nowrap;border:1px solid var(--border)">${cyc ? `<span style="display:inline-block;white-space:nowrap;background:${cycColor}1a;color:${cycColor};font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px">${cyc}</span>` : '-'}</td>
-          <td style="padding:5px 8px;font-size:11px;font-family:var(--mono);border:1px solid var(--border)">${it.ticker || ''}</td>
+          <td class="dg-code" style="padding:5px 8px;font-size:11px;font-family:var(--mono);border:1px solid var(--border)">${it.ticker || ''}</td>
           <td class="dg-name" style="padding:5px 8px;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:1px solid var(--border)" title="${esc(it.name)}">${esc(it.name)}</td>
           <td style="padding:5px 8px;font-size:12px;font-weight:600;text-align:right;font-family:var(--mono);border:1px solid var(--border)">${it.amount != null ? Number(it.amount).toLocaleString() : '-'}</td>
           <td style="padding:5px 8px;font-size:11px;font-weight:600;text-align:right;color:${c.color};border:1px solid var(--border)">${it.rate != null && it.rate > 0 ? Number(it.rate).toFixed(2) + '%' : '-'}</td>
           <td style="padding:5px 8px;font-size:11px;font-weight:600;text-align:right;border:1px solid var(--border)">${chgHtml(it, cyc)}</td>
-          <td onclick="toggleHide('${it.ticker || ''}')" title="${off ? '숨김 해제' : '이 종목 숨기기'}" style="padding:5px 2px;text-align:center;cursor:pointer;user-select:none;font-size:11px;line-height:1;color:${off ? '#f59e0b' : 'var(--text3)'};border:1px solid var(--border)">${off ? '↩' : '✕'}</td>
+          <td onclick="toggleHide('${it.ticker || ''}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleHide('${it.ticker || ''}')}" role="button" tabindex="0" aria-label="${off ? '숨김 해제' : '이 종목 숨기기'}" title="${off ? '숨김 해제' : '이 종목 숨기기'}" style="padding:5px 2px;text-align:center;cursor:pointer;user-select:none;font-size:11px;line-height:1;color:${off ? '#f59e0b' : 'var(--text3)'};border:1px solid var(--border)">${off ? '↩' : '✕'}</td>
         </tr>`}).join('')}</tbody>
       </table></div>`;
     } else if (d.error) {
