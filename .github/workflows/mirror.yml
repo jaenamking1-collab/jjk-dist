@@ -1,0 +1,51 @@
+# jjk 저장소의 dist_notice.html 을 이 저장소의 index.html 로 **자동 미러**한다.
+#
+# 왜 필요한가: 공개 분배금공지 페이지는 이 저장소(GitHub Pages)에서 서빙되는데, 소스는
+# jjk/dist_notice.html 이다. 지금까지 사람이 손으로 복사해 왔고 **이미 네 번 빠뜨렸다**
+# (2026-07-13 · 08-27 · 09-12 두 번). 그때마다 공개 페이지만 조용히 옛 버전으로 남아,
+# 달력 백지·느린 첫 화면 같은 증상이 고쳐진 뒤에도 그대로 보였다.
+#
+# 비밀값이 필요 없다: jjk 는 공개 저장소라 raw 로 그냥 받을 수 있고, 이 저장소에 쓰는 건
+# 기본 GITHUB_TOKEN 으로 된다.
+name: mirror
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'   # 30분마다 (cron 은 best-effort 라 정시 보장은 없다)
+  workflow_dispatch:          # 고친 직후 바로 반영하고 싶을 때
+
+permissions:
+  contents: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: jjk/dist_notice.html 받아서 다르면 커밋
+        run: |
+          set -euo pipefail
+          SRC='https://raw.githubusercontent.com/jaenamking1-collab/jjk/main/dist_notice.html'
+          code=$(curl -sL -o /tmp/src.html -w '%{http_code}' --max-time 60 "$SRC")
+          echo "원본 HTTP $code · $(wc -c < /tmp/src.html) bytes"
+          if [ "$code" != "200" ]; then
+            echo "::error::원본을 못 받았다 (HTTP $code). 이번 회차는 아무것도 바꾸지 않는다."
+            exit 1
+          fi
+          # ⚠️ 빈/깨진 응답으로 공개 페이지를 덮지 않는다. 정상 파일은 70KB 대다.
+          if [ "$(wc -c < /tmp/src.html)" -lt 20000 ]; then
+            echo "::error::받은 파일이 너무 작다 — 덮지 않는다."
+            exit 1
+          fi
+          if cmp -s /tmp/src.html index.html; then
+            echo "이미 같다 — 바꿀 것 없음."
+            exit 0
+          fi
+          cp /tmp/src.html index.html
+          git config user.name  'jaenamking1-collab'
+          git config user.email 'jaenamking1@gmail.com'
+          git add index.html
+          git commit -m "mirror: jjk/dist_notice.html 자동 반영"
+          git push
+          echo "미러 완료."
