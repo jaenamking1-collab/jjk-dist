@@ -28,9 +28,14 @@
     padding:14px 20px; background:linear-gradient(100deg,#fff0f7 0%,#eef1ff 38%,#e6f7ff 68%,#e9fff6 100%);
     border-bottom:1px solid var(--border);
   }
-  .logo{font-size:18px; font-weight:800; letter-spacing:-0.3px;
+  /* white-space:nowrap 이 없으면 좁은 화면에서 제목이 **한 글자씩** 쪼개진다(2026-09-14 폰에서
+     '(9/월/ETF/분배/금/공지' 로 6줄이 됐다). 옆의 방문자수·기준시각 span 이 nowrap 이라 안 줄고,
+     이 제목만 0px 까지 눌린 탓 — 제목을 안 줄이고 메타를 다음 줄로 내린다(아래 .hdr-left). */
+  .logo{font-size:18px; font-weight:800; letter-spacing:-0.3px; white-space:nowrap; flex-shrink:0;
     background:linear-gradient(90deg,#ec4899,#8b5cf6,#3b82f6);
     -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;}
+  .hdr-left{display:flex; align-items:baseline; gap:10px; min-width:0; flex-wrap:wrap;}
+  @media (max-width:430px){ .logo{font-size:16px;} header{padding:10px 14px;} }
   /* 390px에서 '새로고침'이 '새로고/침'으로 쪼개져 헤더가 81px로 부풀었다(실측) */
   .refresh{background:#fff; border:1px solid #e7e0f5; border-radius:10px; padding:7px 12px;
     font-size:13px; color:var(--text2); cursor:pointer; white-space:nowrap;}
@@ -50,7 +55,10 @@
      노트북 폭)에서 '일정'만 둘째 줄에 홀로 가운데 정렬로 떨어지고 달력 옆이 비었다.
      그 구간에서는 공지+달력을 한 줄, 일정을 그 아래 전체 폭으로 내린다. */
   @media (max-width:1503px) and (min-width:821px){
-    .p-sched{width:100%; flex:1 1 100%; max-width:100%;}
+    /* 이 구간에선 일정 패널이 혼자 한 줄을 쓴다. 폭을 안 묶으면 표가 1,240px 까지 늘어나
+       열 하나가 200px 이 된다(2026-09-14 1280×768·1280×1024 에서 지적). 위 달력과 같은
+       792px 로 묶어 가운데 정렬 — 아래 '공지사항' 게시판도 이 패널 안이라 함께 묶인다. */
+    .p-sched{width:100%; flex:1 1 100%; max-width:792px; margin-left:auto; margin-right:auto;}
     .p-cal{flex:1 1 auto; max-width:none;}
     #distScheduleList table{width:100%;}
   }
@@ -89,6 +97,9 @@
   .notice-loading{font-size:12px; color:var(--text3); text-align:center; padding:16px 0;}
   .notice-err{font-size:12px; color:#b91c1c; text-align:center; padding:16px 0;}
   .notice-empty{font-size:12px; color:var(--text2); text-align:center; padding:16px 0;}
+  /* 상류가 죽어 마지막 성공분을 보여주는 중임을 밝힌다 — 낡은 값을 최신인 척 보여주지 않는다 */
+  .notice-stale{font-size:11px; color:#92400e; background:#fffbeb; border:1px solid #fde68a;
+    border-radius:6px; padding:4px 6px; margin:4px 0 2px; line-height:1.35;}
   /* 회차 상태 한 줄 — 달력 바로 위. 대비 6.9:1(#1e3a8a on #eff6ff) */
   .cal-status{font-size:12px; line-height:1.5; color:#1e3a8a; background:#eff6ff;
     border:1px solid #bfdbfe; border-radius:6px; padding:6px 10px; margin-bottom:8px;}
@@ -165,7 +176,7 @@
 </head>
 <body>
 <header>
-  <div style="display:flex;align-items:baseline;gap:10px;min-width:0">
+  <div class="hdr-left">
     <div class="logo">ETF 분배금 공지</div>
     <span id="visitCount" style="font-size:12px;color:#64748b;font-weight:600;white-space:nowrap"></span>
     <span id="dataFresh" style="font-size:12px;color:#475569;font-weight:600;white-space:nowrap"></span>
@@ -815,8 +826,13 @@ async function loadAllNotices(){
   const cached = (bulk && bulk.sources) || {};
   const results = await Promise.allSettled(NOTICE_SOURCES.map(s => {
     const hit = cached[s.id];
-    if (hit && !hit.stale) return Promise.resolve({ ...s, items: hit.items || [], ok: true });
-    return s.fetch().then(items => ({ ...s, items, ok: true })).catch(() => ({ ...s, items: [], ok: false }));
+    if (hit && !hit.stale) return Promise.resolve({ ...s, items: hit.items || [], ok: true, fallback: hit.fallback, savedAt: hit.savedAt });
+    // 재조회가 실패하거나 0건이면 벌크가 실어 보낸 '마지막 성공분'으로 되돌아간다.
+    // 예전엔 여기서 빈 배열을 넣어, 상류가 잠깐 죽은 것만으로 카드가 통째로 비었다.
+    const back = (hit && (hit.items || []).length)
+      ? { ...s, items: hit.items, ok: true, fallback: true, savedAt: hit.savedAt }
+      : { ...s, items: [], ok: false };
+    return s.fetch().then(items => (items && items.length) ? { ...s, items, ok: true } : back).catch(() => back);
   }));
   _noticeData = results.map(r => r.value || {});
   renderNotices();
@@ -840,7 +856,7 @@ function renderNotices(){
     const m = String(n.date || '').match(/\d{4}[.\-\/](\d{1,2})/);
     return m ? parseInt(m[1]) : 0;
   };
-  grid.innerHTML = _noticeData.map(({ id, name, label, items, ok }) => {
+  grid.innerHTML = _noticeData.map(({ id, name, label, items, ok, fallback, savedAt }) => {
     const all = (items || []).map(n => ({ ...n, norm: normalizeNoticeTitle(n.title, id) }))
       .filter(n => n.norm.cycle !== '제외');
     const inMonth = all.filter(n => monOf(n) === selM);
@@ -883,11 +899,14 @@ function renderNotices(){
           ...extra.map(itemHtml) ].join('')
       // 응답은 왔는데 이번 달 공지가 아직 없는 것과, 못 받아온 것은 다른 상태다.
       // 예전엔 둘 다 '불러오기 실패'라 정상인데도 빨간 글씨가 떴다.
-      : (ok === false ? '<div class="notice-err">공지를 못 받았습니다</div>'
+      // '아직 공시가 안 났다'와 '운용사 사이트를 못 읽었다'는 전혀 다른 사실이다.
+      // 후자를 '없음'이라고 쓰면 공시를 낸 운용사를 안 냈다고 알리는 셈이다(2026-09-14 PLUS).
+      : (ok === false ? '<div class="notice-err">운용사 사이트 응답 없음 — 확인 못 했습니다</div>'
                       : `<div class="notice-empty">${selM}월 공지 아직 없음</div>`);
     return `
       <div class="notice-card ${id}">
         <div class="notice-brand ${id}">● ${name} <span style="font-weight:400;color:var(--text3)">${label}</span></div>
+        ${fallback ? `<div class="notice-stale">⚠️ 지금 운용사 사이트가 응답하지 않습니다 · 아래는 ${savedAt || '이전'} 에 받아둔 내용</div>` : ''}
         ${rows}
       </div>`;
   }).join('');
