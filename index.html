@@ -100,10 +100,6 @@
   /* 상류가 죽어 마지막 성공분을 보여주는 중임을 밝힌다 — 낡은 값을 최신인 척 보여주지 않는다 */
   .notice-stale{font-size:11px; color:#92400e; background:#fffbeb; border:1px solid #fde68a;
     border-radius:6px; padding:4px 6px; margin:4px 0 2px; line-height:1.35;}
-  /* 회차 상태 한 줄 — 달력 바로 위. 대비 6.9:1(#1e3a8a on #eff6ff) */
-  .cal-status{font-size:12px; line-height:1.5; color:#1e3a8a; background:#eff6ff;
-    border:1px solid #bfdbfe; border-radius:6px; padding:6px 10px; margin-bottom:8px;}
-  .cal-status b{font-weight:800;}
   .spinner{display:inline-block; width:16px; height:16px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .6s linear infinite; vertical-align:middle; margin-right:6px;}
   @keyframes spin{to{transform:rotate(360deg)}}
 
@@ -123,9 +119,6 @@
   .cal-chip .chip-min{display:none;}
   .cal-evt{margin-top:3px; font-size:11px; font-weight:700; text-align:center; padding:2px 0; border-radius:4px;}
   .cal-evt .lbl-short{display:none;}
-  /* 예정 안내 줄 — 노란 점선 칸의 뜻. 확정과 헷갈리면 안 되므로 폭 전체에 눈에 띄게 둔다. */
-  .cal-plan-note{font-size:11px; line-height:1.45; color:#92400e; background:#fffbeb;
-    border:1px dashed #f59e0b; border-radius:8px; padding:6px 9px; margin-bottom:8px;}
   .cal-companies{display:none; flex-wrap:wrap; gap:3px 10px; justify-content:center; margin-bottom:6px; font-size:10px; color:var(--text2);}
   .cal-co{display:flex; align-items:center; gap:3px;}
   .co-chip{display:inline-flex; align-items:center; justify-content:center; padding:0 3px; height:13px; border-radius:2px; color:#fff; font-size:8px; font-weight:700;}
@@ -450,6 +443,7 @@ async function loadDistributions(force){
   _distSnapSet(_distData);        // 다음에 서버가 죽어도 이 화면은 다시 그릴 수 있다
 }
 
+let _calStatus = '';   // 달력이 계산한 '다음 매수 마감 …' 줄 (📌 공지사항이 읽는다)
 function renderMasterCalendar(allData){
   const now = new Date();
   const year = now.getFullYear(), month = now.getMonth() + 1;
@@ -473,6 +467,17 @@ function renderMasterCalendar(allData){
   // 예정에 쓰는 날짜는 이 셋뿐이다. 공시일은 운용사가 언제 낼지 우리가 알 수 없으므로 만들어내지 않는다.
   const PLAN_KEYS = ['분배락일','기준일','지급일'];
   const planSched = sch => { const o = {}; PLAN_KEYS.forEach(k => { if (sch[k]) o[k] = sch[k]; }); return o; };
+  // ⛔ 공시일이 제 기준일보다 뒤면 그건 공시일이 아니다. RISE 만 '공시일'을 실제 공시가 아니라
+  // **글 게시일**에서 뽑는데, 끝난 회차에 정정·확정 글이 올라오면 그 게시일이 그 회차에 붙는다
+  // (2026-09-21: 8월말 회차가 기준 8/31·지급 9/2 인데 공시 9/7 → 끝난 회차의 '분배금공시일'이
+  // 9월 달력에 떴다). 600 = 6개월치 여유 — 12월 공시 → 1월 기준 같은 정상 건은 지우지 않는다.
+  // portfolio.html / dist_notice.html 양쪽이 같아야 하는 '데이터 해석 규칙'이다.
+  const pubAfterBase = sch => {
+    const p = parseDay(sch['공시일']), b = parseDay(sch['기준일']);
+    if (!p || !b) return false;
+    const diff = (p.m * 100 + p.d) - (b.m * 100 + b.d);
+    return diff > 0 && diff < 600;
+  };
   const addAll = (c, sch, it, uncertain) => {
     const cyc = cycleOf(sch, it);
     if (!uncertain && cyc === curCycle) {
@@ -489,6 +494,7 @@ function renderMasterCalendar(allData){
       }
     }
     SCHED_CFG.forEach(({ key, color, text, label, short }) => {
+      if (key === '공시일' && pubAfterBase(sch)) return;
       // 예정도 **라벨은 확정분과 똑같이** 둔다 → 같은 줄에 `SOL?` 배지로만 붙는다.
       // 라벨에 '예정'을 붙였더니 한 칸에 '분배락일'과 '분배락일 예정' 두 줄이 생겨 달력이 지저분해졌다.
       // (addMark의 회사+라벨 중복제거는 **같은 날짜 칸 안에서만** 걸리므로 라벨을 나눌 이유가 없었다.)
@@ -630,10 +636,10 @@ function renderMasterCalendar(allData){
     // 한 곳이라도 실제 공시가 있으면 보통 셀이고, 그 회사만 `?` 없이 나온다.
     const allPlan = ms.length > 0 && ms.every(mk => mk.uncertain);
     const bg = isToday ? 'background:#eff6ff;'
-      : allPlan ? 'background:#fffbeb;'
+      : allPlan ? 'background:#f9fafb;'
       : ms.length ? 'background:var(--bg3);' : weekendBg;
     const border = isToday ? 'border:2px solid #3b82f6;'
-      : allPlan ? 'border:1px dashed #f59e0b;'
+      : allPlan ? 'border:1px dashed #cbd5e1;'
       : 'border:1px solid var(--border);';
     const dateColor = isToday ? '#2563eb' : (hol || dow === 0) ? '#dc2626' : dow === 6 ? '#2563eb' : 'var(--text)';
     const byLabel = {};
@@ -646,14 +652,19 @@ function renderMasterCalendar(allData){
       // 고정 슬롯: 윗줄 KODEX·TIGER·ACE / 아랫줄 PLUS·RISE·SOL, 없는 회사는 빈칸
       const bySource = {};
       g.sources.forEach(s => { bySource[s.name] = { color: s.color, uncertain: s.uncertain }; });
+      // ⛔ 예정은 **회색**으로 낮춘다. 회사색이 살아 있으면 확정값과 똑같이 읽힌다(2026-09-21 지적).
       const icons = DIST_SOURCES.map(s => { const b = bySource[s.name]; const q = b && b.uncertain ? '?' : '';
+        const chipStyle = b ? (b.uncertain ? 'background:#cbd5e1;color:#475569' : `background:${b.color}`) : '';
         return b
-        ? `<span class="cal-chip" style="background:${b.color}"><span class="chip-full">${s.name}${q}</span><span class="chip-min">${s.name.slice(0,3)}${q}</span></span>`
+        ? `<span class="cal-chip" style="${chipStyle}"><span class="chip-full">${s.name}${q}</span><span class="chip-min">${s.name.slice(0,3)}${q}</span></span>`
         : '<span class="cal-chip"></span>';
       }).join('');
+      const gPlan = g.sources.length > 0 && g.sources.every(x => x.uncertain);   // 이 라벨이 통째로 예정인가
+      const evtStyle = gPlan ? 'background:#e5e7eb;color:#64748b'
+                             : `background:${g.labelColor}1a;color:${g.labelText || g.labelColor}`;
       return `<div style="margin-top:4px">
         <div class="cal-icons">${icons}</div>
-        <div class="cal-evt" style="background:${g.labelColor}1a;color:${g.labelText || g.labelColor}"><span class="lbl-full">${label}</span><span class="lbl-short">${g.shortLabel || label}</span></div>
+        <div class="cal-evt" style="${evtStyle}"><span class="lbl-full">${label}</span><span class="lbl-short">${g.shortLabel || label}</span></div>
       </div>`;
     }).join('');
     return `<div class="cal-cell" style="${bg}${border}">
@@ -682,7 +693,6 @@ function renderMasterCalendar(allData){
   const _isPay = l => /지급일$/.test(l) && l.indexOf('기준') < 0;
   // 예정(합의·계산)이 화면에 하나라도 있으면 아래에 그 뜻을 적는다. 노란 점선 칸이 무엇인지
   // 안 쓰면 보는 사람은 확정으로 읽는다 — 공개 페이지에서 그건 틀린 정보를 알리는 것과 같다.
-  const hasPlan = Object.keys(marks).some(k => marks[k].some(mk => mk.uncertain));
 
   const statusHtml = (() => {
     const rakToday = _pick(_isRak, _t0, _t0);
@@ -701,18 +711,18 @@ function renderMasterCalendar(allData){
     // '그날까지 사면 받습니다'라고 단정하게 됐다(2026-09-21). 그 회차의 마크가 전부 예정이면 밝힌다.
     const _planOn = q => { const a = marks[`${q.m}-${q.d}`] || []; return a.length > 0 && a.every(mk => mk.uncertain); };
     const plan = _planOn(rak.q);
-    const tag = plan ? ' <b style="color:#b45309">(예정)</b>' : '';
-    const why = plan ? ' · <span style="color:#b45309">아직 공시 전이라 달력으로 계산한 날짜입니다</span>' : '';
-    if (rakToday) return `<b>오늘 ${_fmt(rak.q)} 분배락일</b>${tag} — 이 회차 매수는 <b>${_fmt(cut)}</b>로 마감됐습니다${tail}${why}`;
+    const tag = plan ? ' <b style="color:#64748b">(예정)</b>' : '';
+    if (rakToday) return `<b>오늘 ${_fmt(rak.q)} 분배락일</b>${tag} — 이 회차 매수는 <b>${_fmt(cut)}</b>로 마감됐습니다${tail}`;
     const dday = _days(_t0, _dt(cut));
-    if (dday < 0) return `이 회차 매수는 <b>${_fmt(cut)}</b>로 마감됐습니다${tag} · 분배락 ${_fmt(rak.q)}${tail}${why}`;
-    return `다음 매수 마감 <b>${_fmt(cut)}</b> ${dday === 0 ? '<b>오늘까지</b>' : `<b>D-${dday}</b>`}${tag} — 그날까지 사면 받습니다 · 분배락 ${_fmt(rak.q)}${tail}${why}`;
+    if (dday < 0) return `이 회차 매수는 <b>${_fmt(cut)}</b>로 마감됐습니다${tag} · 분배락 ${_fmt(rak.q)}${tail}`;
+    return `다음 매수 마감 <b>${_fmt(cut)}</b> ${dday === 0 ? '<b>오늘까지</b>' : `<b>D-${dday}</b>`}${tag} — 그날까지 사면 받습니다 · 분배락 ${_fmt(rak.q)}${tail}`;
   })();
 
+  // 상태줄('다음 매수 마감 …')은 달력이 아니라 📌 공지사항 맨 위에 둔다(2026-09-21 사용자 요청).
+  // 달력은 날짜만 보여주고, 말로 된 안내는 넓은 공지사항 칸이 맡는다.
+  _calStatus = statusHtml;
   const calHtml = `
     <div>
-      ${statusHtml ? `<div class="cal-status">${statusHtml}</div>` : ''}
-      ${hasPlan ? `<div class="cal-plan-note">🟡 <b>노란 점선 칸</b>은 아직 공시 전이라 달력 규칙으로 계산한 <b>예정</b>입니다(회사 이름 뒤 <b>?</b>). 공시가 나오면 실제 날짜로 바뀝니다. <b>공시일은 예측하지 않습니다.</b></div>` : ''}
       <div class="cal-companies">
         ${DIST_SOURCES.map(s => `<span class="cal-co"><span class="co-chip" style="background:${s.color}">${s.name.slice(0,3)}</span>${s.name}</span>`).join('')}
       </div>
@@ -722,6 +732,8 @@ function renderMasterCalendar(allData){
       </div>
     </div>`;
   document.getElementById('distMasterCalendar').innerHTML = calHtml;
+  // 상태줄이 📌 공지사항에 있으므로, 달을 넘기면 게시판도 다시 그려야 최신이 된다.
+  if (typeof renderNoticeBoard === 'function') renderNoticeBoard();
 
   // ── 운용사별 일정 표 (월중/월말 2줄) ──
   // ←/→ 버튼으로 고른 달(selM)의 일정만 표시. 행 귀속 월은 기준일(없으면 지급일)의 월.
@@ -1060,10 +1072,21 @@ function renderNoticeBoard() {
   // 상시 안내 — 운용사 데이터가 아니라 고정 문구다. 매달 헷갈리는 지점이라 게시판 맨 위에 늘 둔다.
   // 한국 주식은 T+2 결제라 분배락일에 사면 지급기준일 주주명부에 못 든다 ⇒ 매수 마감은 락일 '전날'이다.
   // portfolio.html의 renderNoticeBoard와 쌍이다 — 한쪽을 고치면 반드시 다른 쪽도.
-  const fixed = `
+  // 달력 위에 있던 '다음 매수 마감 …' 줄도 여기로 옮겼다(2026-09-21) — 달력은 날짜만 보여준다.
+  const status = _calStatus ? `
+    <div style="display:flex;align-items:flex-start;gap:6px;min-width:0;padding:5px 8px;border-bottom:1px solid #64748b;background:#fffbeb">
+      <span style="flex-shrink:0;margin-top:1px;background:#d977061a;color:#d97706;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px">일정</span>
+      <span style="flex:1;min-width:0;font-size:11px;line-height:1.35;color:var(--text)">${_calStatus}</span>
+    </div>` : '';
+  const fixed = status + `
     <div style="display:flex;align-items:center;gap:6px;min-width:0;padding:5px 8px;border-bottom:1px solid #64748b;background:#ecfeff">
       <span style="flex-shrink:0;background:#0891b21a;color:#0891b2;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px">안내</span>
       <span style="flex:1;min-width:0;font-size:11px;line-height:1.3;color:var(--text)"><b>분배락일 전날</b>까지 사야 받습니다</span>
+      <span style="flex-shrink:0;font-family:var(--mono);font-size:10px;color:var(--text3)">상시</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;min-width:0;padding:5px 8px;border-bottom:1px solid #64748b;background:#ecfeff">
+      <span style="flex-shrink:0;background:#0891b21a;color:#0891b2;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px">안내</span>
+      <span style="flex:1;min-width:0;font-size:11px;line-height:1.3;color:var(--text)">달력의 <b>회색 점선 칸</b>(회사명 뒤 <b>?</b>)은 공시 전이라 달력으로 계산한 <b>예정</b>입니다 · 공시일은 예측하지 않습니다</span>
       <span style="flex-shrink:0;font-family:var(--mono);font-size:10px;color:var(--text3)">상시</span>
     </div>`;
   const body = fixed + (top.length
