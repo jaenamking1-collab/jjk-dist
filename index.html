@@ -145,9 +145,16 @@
   .co-chip{display:inline-flex; align-items:center; justify-content:center; padding:0 3px; height:13px; border-radius:2px; color:#fff; font-size:8px; font-weight:700;}
 
   /* ── mobile: 세로 스택, 달력은 화면 폭에 맞게 축소, 일정 표만 좌우 스크롤 ── */
+  /* 종목전체 운용사 탭 — 폰에서 8곳 표가 세로로 이어져 너무 길었다(2026-10-29 사용자). 폰만 한 곳씩, PC 는 그대로. */
+  .co-tabs{display:none;}
   @media (max-width:820px){
     .panels{flex-direction:column; align-items:stretch; gap:8px;}
     .dist-grid{display:grid; grid-template-columns:1fr;}
+    /* 4칸씩 두 줄 — 옆으로 밀면 4곳만 보여 나머지가 있는 줄 몰랐다 */
+    .co-tabs{display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; margin-bottom:10px;}
+    .co-tab{min-width:0; padding:9px 2px; border-radius:999px; border:1.5px solid var(--c); background:#fff; color:var(--c); font-size:12px; font-weight:800; line-height:1; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+    .co-tab.on{background:var(--c); color:#fff;}
+    .dist-grid > div:not(.co-on){display:none;}
     .tabbar{display:flex; padding:6px 8px; gap:4px;}
     /* 탭·화살표를 손가락 크기로 — 실측 tab-btn 91x33, 화살표 24x24 였다 */
     .tab-btn{font-size:11px; padding:14px 2px;}
@@ -1096,7 +1103,14 @@ function renderNotices(){
         if (it.hist) continue;
         const sch = (it.sched && Object.keys(it.sched).length) ? it.sched : (d.schedule || {});
         const b = parseDay(sch['기준일']), p = parseDay(sch['공시일']);
-        if (!b || !p || b.m !== selM || (b.d <= 20 ? '월중' : '월말') !== cyc) continue;
+        if (!b || b.m !== selM || (b.d <= 20 ? '월중' : '월말') !== cyc) continue;
+        // 예탁결제원 자료엔 공시일이 없다. 거기 올라왔다는 것 자체가 공시가 났다는 뜻이라 줄은 채우되
+        // 날짜는 모른다고 밝힌다(2026-10-29 TIGER 월말: 사이트 차단으로 이 줄이 '-' 로 비었다).
+        if (!p) {
+          if (d._fallback !== 'seibro') continue;
+          return { title: `${selM}월 ${cyc} 분배금 — 예탁결제원 자료로 확인(운용사 사이트 응답 없음, 공시일 확인 못 함)`, date: '공시일 ?',
+                   url: ISSUER_NOTICE_URL[id] || '', norm: { label: `${selM}월 ${cyc}배당`, cycle: cyc, mon: selM } };
+        }
         const pub = new Date(now.getFullYear(), p.m - 1, p.d);
         if (pub - now > 180 * 86400000) pub.setFullYear(pub.getFullYear() - 1);   // 1월에 본 12월 공시
         if (pub > now) continue;
@@ -1177,12 +1191,20 @@ function renderFreshness(all){
   // portfolio.html의 distStaleLimitH와 같은 기준 — 공지창엔 30분마다, 그 밖엔 새벽 1회만 돈다.
   const _d = new Date().getDate();
   const limitH = ((_d >= 8 && _d <= 16) || _d >= 23) ? 6 : 30;
+  // 운용사 사이트를 못 읽어 대체 자료로 채운 곳 — 데이터 시각은 최신이라 'N곳 최신'에 묻혀 안 보였다
+  // (2026-10-29 TIGER: 미래에셋이 막아 10/28 월말 공시가 하루 빠졌는데 화면은 '8곳 최신'이었다).
+  // RISE 'blog' 는 운용사 공식 블로그라 대체 자료로 치지 않는다(공시일도 채워진다).
+  const VIA = { seibro: '예탁결제원 자료', news: '뉴스 기사' };
+  const via = has.filter(c => !c.data.offline && VIA[c.data._fallback]);
   el.textContent = `· 데이터 ${t}${t ? ' 기준' : ''}`
     + (staleH >= limitH ? ` · 🚨 ${staleH}시간째 갱신 안 됨`
        : off.length ? ` · ⚠️ 서버 응답 없음(${off.join('·')})`
-       : stale.length ? ` · ${stale.join('·')} 캐시` : ` · ${has.length}곳 최신`);
-  el.title = off.length ? `${off.join(', ')} 은(는) 서버가 응답하지 않아 이 브라우저에 저장된 마지막 일정을 보여주고 있습니다`
-    : stale.length ? `${stale.join(', ')} 은(는) 마지막 파싱 결과입니다(재조회 실패 또는 대기)` : '';
+       : stale.length ? ` · ${stale.join('·')} 캐시` : ` · ${has.length - via.length}곳 최신`)
+    + (via.length ? ` · ⚠️ ${via.map(c => c.name).join('·')} 대체 자료` : '');
+  el.title = [off.length ? `${off.join(', ')} 은(는) 서버가 응답하지 않아 이 브라우저에 저장된 마지막 일정을 보여주고 있습니다`
+    : stale.length ? `${stale.join(', ')} 은(는) 마지막 파싱 결과입니다(재조회 실패 또는 대기)` : '']
+    .concat(via.map(c => `${c.name}: 운용사 사이트 응답 없음 — ${VIA[c.data._fallback]}로 표시 중(공시일·분배율이 비거나 다를 수 있음)`))
+    .filter(Boolean).join('\n');
 }
 
 // ── 공지 종목 전체 (하단 섹션) ──
@@ -1191,7 +1213,7 @@ function renderFreshness(all){
 const esc = s => String(s || '').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 
 // 운용사 카드 하단 '특별 공지' 줄. 좌측 공지 패널이 쓰는 _noticeData를 그대로 재사용한다(새 데이터 소스 0).
-// 정기 월중·월말 회차는 위 표와 좌측 패널에 이미 있으니 빼고, **비정기 사건만** 최근 90일 최대 3건.
+// 정기 월중·월말 회차는 위 표와 좌측 패널에 이미 있으니 빼고, **비정기 사건만** 최근 30일 최대 3건(2026-10-29 90→30일: 효력이 끝난 9/2 TIGER 전환 안내가 두 달째 남아 있었다).
 // 제목 키워드로만 판정한다 — normalizeNoticeTitle의 cycle은 ACE 분기에서 특별 공지도 '월말'로 떨어진다.
 const NOTICE_COLOR = { kodex:'#2563eb', tiger:'#f97316', ace:'#059669', plus:'#7c3aed', rise:'#dc2626', sol:'#0891b2', hanaro:'#65a30d', kiwoom:'#db2777' };
 // ⚠️ 이 집합은 NOTICE_EVENT_RE 의 **상위집합**이어야 한다. 그래야 왼쪽 카드에서 빠진 공지가
@@ -1203,14 +1225,14 @@ function distIssueNotices(items, now){
     .filter(n => {
       if (!DIST_ISSUE_RE.test(n.title || '')) return false;
       const m = String(n.date || '').match(/(\d{4})[.\-\/](\d{1,2})[.\-\/](\d{1,2})/);
-      return m ? (t - new Date(+m[1], +m[2] - 1, +m[3]).getTime()) < 90 * 86400000 : false;
+      return m ? (t - new Date(+m[1], +m[2] - 1, +m[3]).getTime()) < 30 * 86400000 : false;
     })
     .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
     .slice(0, 3);
 }
 // 🏢 운용사별 일정 패널 아래 '공지사항' 게시판. 좌측 공지 패널이 이미 받아둔 _noticeData를
 // 그대로 쓴다(새 데이터 소스 0). 정기 월중·월말 회차는 위 표·좌측 패널에 이미 있으니 빼고,
-// 특별분배·정정·상장폐지 같은 **비정기 건만** 6개사를 합쳐 최근 90일 최대 5건, 최신순.
+// 특별분배·정정·상장폐지 같은 **비정기 건만** 6개사를 합쳐 최근 30일 최대 5건, 최신순.
 // 비어 있어도 틀은 남긴다 — 안 그리면 자리가 있는지조차 화면에서 확인이 안 된다.
 // 공지내용 변경(최근 24시간) — 앱의 📌 공지사항과 같은 '변경' 줄. 페이지당 한 번만 받는다.
 // portfolio.html 은 토큰으로 알림로그를 읽고, 여기는 공개 액션 getNoticeChanges(공지변경만, 24시간)를 쓴다.
@@ -1251,7 +1273,16 @@ function renderNoticeBoard() {
         : '<span style="flex-shrink:0;margin-top:1px;background:#d977061a;color:#d97706;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px">일정</span>'}
       <span style="flex:1;min-width:0;font-size:11px;line-height:1.35;color:var(--text)">${_calStatus}</span>
     </div>` : '';
-  const fixed = status + `
+  // 운용사 사이트를 못 읽어 대체 자료로 보여주는 곳을 방문자에게 알린다(2026-10-29 TIGER — 미래에셋이 외부 서버 접속을 막음).
+  // 원인은 확인된 것만 쓴다('해킹' 등 추측 금지 — 공개 페이지에 실제 회사 이름으로 나간다). 풀리면 _fallback 이 없어져 저절로 사라진다.
+  const VIA_NOTE = { seibro: '예탁결제원 자료', news: '뉴스 기사' };
+  const viaNote = (_distData || []).filter(c => c.data && VIA_NOTE[c.data._fallback]).map(c => `
+    <div style="display:flex;align-items:flex-start;gap:6px;min-width:0;padding:5px 8px;border-bottom:1px solid #64748b;background:#fffbeb">
+      <span style="flex-shrink:0;margin-top:1px;background:#d977061a;color:#d97706;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px">알림</span>
+      <span style="flex:1;min-width:0;font-size:11px;line-height:1.35;color:var(--text)"><b>${c.name}</b> 운용사 사이트가 외부 서버 접속을 막고 있어 <b>${VIA_NOTE[c.data._fallback]}</b>로 보여드립니다 · 공시일은 늦게 반영될 수 있고 분배율은 계산값입니다</span>
+      <span style="flex-shrink:0;font-family:var(--mono);font-size:10px;color:var(--text3)">임시</span>
+    </div>`).join('');
+  const fixed = status + viaNote + `
     <div style="display:flex;align-items:center;gap:6px;min-width:0;padding:5px 8px;border-bottom:1px solid #64748b;background:#ecfeff">
       <span style="flex-shrink:0;background:#0891b21a;color:#0891b2;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px">안내</span>
       <span style="flex:1;min-width:0;font-size:11px;line-height:1.3;color:var(--text)"><b>분배락일 전날</b>까지 사야 받습니다</span>
@@ -1296,7 +1327,8 @@ let _favOnly = localStorage.getItem(FAVONLY_KEY) === '1';
 // 숨긴 종목: 다음에 다시 들어와도 그대로 빠져 있게 localStorage 에 남긴다.
 let _hide = readSet(HIDE_KEY);
 let _showHidden = false;                  // 숨긴 것을 되돌리려고 잠깐 보는 모드 (저장 안 함)
-let _gridData = [];                       // 별을 눌렀을 때 다시 그리려고 마지막 데이터를 들고 있는다
+let _gridCo = (() => { try { return localStorage.getItem('jjk_grid_co') || ''; } catch(e) { return ''; } })();   // 폰 종목전체에서 고른 운용사
+let _gridData = [];                    // 별을 눌렀을 때 다시 그리려고 마지막 데이터를 들고 있는다
 
 function toggleFav(ticker){
   if (!ticker) return;
@@ -1454,7 +1486,17 @@ function renderDistGrid(allData){
     hint += `<div style="padding:8px 10px;margin-bottom:8px;border:1px dashed #f59e0b;border-radius:8px;font-size:12px;color:var(--text)">★ 표시한 종목이 아직 없습니다. 아래 표의 ☆를 눌러 담으면 그 종목만 보입니다.</div>`;
   if (_showHidden)
     hint += `<div style="padding:8px 10px;margin-bottom:8px;border:1px dashed #64748b;border-radius:8px;font-size:12px;color:var(--text)">숨긴 종목(흐린 줄)을 함께 보고 있습니다. ↩를 누르면 다시 나옵니다.${_hide.size ? ` <button onclick="clearHidden()" style="margin-left:6px;padding:2px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:11px;font-weight:700;cursor:pointer">전체 해제</button>` : ''}</div>`;
-  grid.innerHTML = hint + `<div class="dist-grid">${cards.join('')}</div>`;
+  // 폰에선 운용사 탭으로 한 곳만 보인다(CSS 가 .co-on 아닌 카드를 숨김). 고른 곳이 이번 달에 비었으면 첫 곳.
+  const shown = allData.filter((c, i) => cards[i]);
+  const co = shown.some(c => c.id === _gridCo) ? _gridCo : (shown[0] || {}).id;
+  const tabs = shown.length > 1 ? `<div class="co-tabs" role="tablist">${shown.map(c =>
+    `<button type="button" role="tab" aria-selected="${c.id === co}" class="co-tab${c.id === co ? ' on' : ''}" style="--c:${c.color}" onclick="gridPickCo('${c.id}')">${c.name}</button>`).join('')}</div>` : '';
+  grid.innerHTML = hint + tabs + `<div class="dist-grid">${cards.map((h, i) => (h && allData[i].id === co) ? h.replace('<div ', '<div class="co-on" ') : h).join('')}</div>`;
+}
+function gridPickCo(id) {
+  _gridCo = id;
+  try { localStorage.setItem('jjk_grid_co', id); } catch(e) {}
+  renderDistGrid();
 }
 
 // 새로고침 버튼: 페이지 자체를 다시 로드(배포된 새 코드 반영) + 데이터 강제 갱신
